@@ -1,0 +1,45 @@
+{
+  "port": 8082,
+  "host": "0.0.0.0",
+  "routes": {
+    "anthropic": {
+      "enabled": true,
+      "priority": 1,
+      "baseUrl": "https://api.anthropic.com",
+      "apiKey": "${ANTHROPIC_API_KEY}"
+    },
+    "githubCopilot": {
+      "enabled": true,
+      "priority": 2,
+      "baseUrl": "https://api.githubcopilot.com",
+      "apiKey": "${GITHUB_COPILOT_API_KEY}"
+    },
+    "antigravity": {
+      "enabled": true,
+      "priority": 3,
+      "baseUrl": "${ANTIGRAVITY_URL}",
+      "apiKey": "${GLM_API_KEY}"
+    }
+  },
+  "rateLimits": {
+    "anthropic": {
+      "requestsPerMinute": 50,
+      "tokensPerMinute": 40000
+    },
+    "githubCopilot": {
+      "requestsPerMinute": 100
+    },
+    "antigravity": {
+      "requestsPerMinute": 15
+    }
+  },
+  "logging": {
+    "level": "info",
+    "logRequests": true,
+    "logErrors": true
+  },
+  "cache": {
+    "enabled": true,
+    "ttl": 300
+  }
+}

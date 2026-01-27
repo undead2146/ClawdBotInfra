@@ -1,0 +1,12 @@
+{
+  "$schema": "https://claude.ai/api/settings-schema.json",
+  "humanSecondaryConfirmation": "ask",
+  "apiUrl": "http://proxy:8082",
+  "sshKeyPath": "~/.ssh/id_rsa",
+  "defaultModel": "claude-sonnet-4-20250514",
+  "mcpServers": {},
+  "enabledMCPs": [],
+  "dangerouslyAllowDerivedRepositories": false,
+  "dangerouslyAllowMethodSwitching": false,
+  "dangerouslyAllowWorkerTasks": false
+}
