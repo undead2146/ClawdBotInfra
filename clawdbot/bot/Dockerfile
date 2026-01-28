@@ -10,15 +10,21 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY bot/package*.json ./
 
 # Install dependencies
 RUN npm install
 
 # Copy bot code
-COPY . .
+COPY bot/ ./
 
-# Expose port (not needed for polling, but good practice)
+# Copy orchestrator modules
+COPY orchestrator/ ./orchestrator/
+
+# Copy skills
+COPY skills/ ./skills/
+
+# Expose port (not needed for polling)
 EXPOSE 3000
 
 # Environment variables
@@ -26,4 +32,4 @@ ENV TELEGRAM_BOT_TOKEN=8558008669:AAFPdgQ0-9snUSjbsjrvvjP00mw7lUIIV5Y
 ENV CLAWDBOT_URL=http://clawdbot:8082
 
 # Start the bot
-CMD ["npm", "start"]
+CMD ["node", "index.js"]
