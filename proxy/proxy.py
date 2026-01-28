@@ -281,6 +281,20 @@ def fix_thinking_blocks(body_json: dict, has_thinking_beta: bool, use_real_anthr
     """
     return body_json
 
+
+def clean_response_headers(headers: dict) -> dict:
+    """
+    Clean up response headers to avoid HTTP spec violations.
+    Remove Transfer-Encoding and Content-Length as the framework handles these.
+    """
+    cleaned = {}
+    for key, value in headers.items():
+        # Skip problematic headers that cause "Content-Length can't be present with Transfer-Encoding"
+        if key.lower() in ['transfer-encoding', 'content-length', 'content-encoding', 'connection']:
+            continue
+        cleaned[key] = value
+    return cleaned
+
 def has_thinking_in_beta(beta_header: str) -> bool:
     """Check if thinking is enabled in beta features."""
     if not beta_header:
@@ -359,7 +373,7 @@ async def proxy_to_antigravity(body_json: dict, original_headers: dict, endpoint
                 return StreamingResponse(
                     stream_response(),
                     status_code=response.status_code,
-                    headers=dict(response.headers),
+                    headers=clean_response_headers(response.headers),
                     media_type="text/event-stream",
                 )
             else:
@@ -373,7 +387,7 @@ async def proxy_to_antigravity(body_json: dict, original_headers: dict, endpoint
                 return JSONResponse(
                     content=response.json(),
                     status_code=response.status_code,
-                    headers=dict(response.headers),
+                    headers=clean_response_headers(response.headers),
                 )
     except httpx.ReadTimeout as e:
         logger.error(f"[Antigravity] ReadTimeout after {REQUEST_TIMEOUT}s - Google account may be rate-limited or expired. Try: npx antigravity-claude-proxy@latest accounts add")
@@ -419,7 +433,7 @@ async def proxy_to_copilot(body_json: dict, original_headers: dict, endpoint: st
                 return StreamingResponse(
                     stream_response(),
                     status_code=response.status_code,
-                    headers=dict(response.headers),
+                    headers=clean_response_headers(response.headers),
                     media_type="text/event-stream",
                 )
             else:
@@ -431,13 +445,13 @@ async def proxy_to_copilot(body_json: dict, original_headers: dict, endpoint: st
                     return JSONResponse(
                         content=response.json(),
                         status_code=response.status_code,
-                        headers=dict(response.headers),
+                        headers=clean_response_headers(response.headers),
                     )
                 
                 return JSONResponse(
                     content=response.json(),
                     status_code=response.status_code,
-                    headers=dict(response.headers),
+                    headers=clean_response_headers(response.headers),
                 )
     
     except httpx.TimeoutException:
@@ -671,7 +685,7 @@ async def proxy_request(request: Request, endpoint: str) -> JSONResponse | Strea
                 return StreamingResponse(
                     stream_response(),
                     status_code=response.status_code,
-                    headers=dict(response.headers),
+                    headers=clean_response_headers(response.headers),
                     media_type="text/event-stream",
                 )
             else:
@@ -683,7 +697,7 @@ async def proxy_request(request: Request, endpoint: str) -> JSONResponse | Strea
                     return JSONResponse(
                         content=response.json(),
                         status_code=response.status_code,
-                        headers=dict(response.headers),
+                        headers=clean_response_headers(response.headers),
                     )
                 
                 # Strip thinking blocks from response for Real Anthropic OAuth
@@ -698,7 +712,7 @@ async def proxy_request(request: Request, endpoint: str) -> JSONResponse | Strea
                 return JSONResponse(
                     content=response_json,
                     status_code=response.status_code,
-                    headers=dict(response.headers),
+                    headers=clean_response_headers(response.headers),
                 )
     
     except Exception as e:

@@ -4,11 +4,32 @@ const TelegramBot = require('node-telegram-bot-api');
 // Telegram Bot Token
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8558008669:AAFPdgQ0-9snUSjbsjrvvjP00mw7lUIIV5Y';
 
-// Create bot
-const bot = new TelegramBot(TOKEN, { polling: true });
+// Create bot with reaction support (polling starts later after init)
+const bot = new TelegramBot(TOKEN, {
+  polling: false,
+  allowed_updates: ['message', 'message_reaction', 'message_reaction_count']
+});
 
 // Import orchestrator
 const { orchestrate, createSession } = require('./orchestrator/main.js');
+
+// Import session store
+const sessionStore = require('./storage/session-store');
+
+// Import fast responder
+const fastResponder = require('./storage/fast-responder');
+
+// Import metrics and reaction modules
+const MetricsCollector = require('./metrics-collector');
+const { getInstance: getMetadataStore } = require('./message-metadata-store');
+const { handleReaction, formatResponseWithVerbosity } = require('./reaction-handler');
+const { getModelEmoji, getStatusReaction, getReactionsForVerbosity, EMOJI } = require('./emoji-mappings');
+
+// Initialize metadata store
+const metadataStore = getMetadataStore();
+
+// Start metadata cleanup every hour
+setInterval(() => metadataStore.cleanup(3600000), 3600000);
 
 // Store user sessions (with orchestrator)
 const userSessions = new Map();
@@ -31,32 +52,101 @@ function getUserSession(userId) {
   return userSessions.get(userId);
 }
 
-// Helper: Format orchestrator result for Telegram
-function formatOrchestratorResult(result) {
+// Helper: Update status message with progress indicators
+async function updateStatus(bot, chatId, messageId, status, emoji = '🤖') {
+  const statusMessages = {
+    'thinking': '🤖 Thinking...',
+    'analyzing': '🔍 Analyzing your request...',
+    'processing': '⚙️ Processing...',
+    'generating': '✨ Generating response...',
+    'error': '❌ Error occurred',
+    'done': '✅ Done'
+  };
+
+  const text = statusMessages[status] || `${emoji} ${status}`;
+
+  try {
+    await bot.editMessageText(chatId, messageId, { text });
+  } catch (error) {
+    // Ignore edit errors (message might be too old)
+    console.debug(`[Bot] Status update failed: ${error.message}`);
+  }
+}
+
+// Helper: Format orchestrator result for Telegram with verbosity support
+function formatOrchestratorResult(result, metrics = null, verbosity = 'medium') {
   let output = '';
 
-  // Add metadata header only for concise responses
-  if (result.metadata && result.metadata.confidence > 2) {
-    output = `🎯 ${result.skill} | 🧠 ${result.model}\n\n`;
+  // Add metrics header based on verbosity (always show if model available)
+  if (result.model) {
+    const modelEmoji = getModelEmoji(result.model);
+    const breakdown = metrics?.getBreakdown();
+
+    if (verbosity === 'full' && breakdown) {
+      output += `📊 Request Metrics\n`;
+      output += `${modelEmoji} Model: ${result.model}\n`;
+      output += `🎯 Skill: ${result.skill}\n`;
+      output += `⏱️ Total: ${breakdown.total}ms\n\n`;
+
+      output += `⏱️ Timing Breakdown\n`;
+      if (breakdown.skillDetection) output += `• Skill detection: ${breakdown.skillDetection}ms\n`;
+      if (breakdown.modelSelection) output += `• Model selection: ${breakdown.modelSelection}ms\n`;
+      if (breakdown.apiCall) output += `• API call: ${breakdown.apiCall}ms\n`;
+      if (breakdown.formatting) output += `• Response formatting: ${breakdown.formatting}ms\n`;
+      if (breakdown.orchestrator) output += `• Orchestrator: ${breakdown.orchestrator}ms\n`;
+      output += '\n';
+    } else {
+      // Medium and minimal verbosity - show one-line header
+      const totalTime = breakdown?.total || result.executionTime || 'N/A';
+      output += `${modelEmoji} ${result.model}`;
+      if (result.skill) output += ` | ${result.skill}`;
+      output += ` | ${totalTime}ms\n\n`;
+    }
   }
 
   // Add main result
   if (result.result) {
-    const { output: resultOutput, method, result: skillResult } = result.result;
+    const { output: resultOutput, method, result: skillResult, error: resultError } = result.result;
 
-    if (skillResult && skillResult.results) {
+    // Handle error in result
+    if (resultError) {
+      output += `❌ Error: ${resultError}`;
+    }
+    // Handle skill results with nested results property
+    else if (skillResult && skillResult.results) {
       output += skillResult.results;
-    } else if (resultOutput) {
+    }
+    // Handle direct output from Claude API
+    else if (resultOutput) {
       output += resultOutput;
-    } else if (typeof skillResult === 'string') {
+    }
+    // Handle skill result as string
+    else if (typeof skillResult === 'string') {
       output += skillResult;
-    } else {
+    }
+    // Handle nested skill result with output property
+    else if (skillResult && skillResult.output) {
+      output += skillResult.output;
+    }
+    // Fallback: stringify the result object
+    else if (skillResult) {
       output += JSON.stringify(skillResult, null, 2);
+    }
+    // No content available
+    else {
+      output += '⚠️ No response content received from the AI service. The service may be unavailable or returned an empty response.';
     }
   }
 
+  // Handle error at top level
   if (result.error && !result.result) {
+    if (output) output += '\n\n';
     output += `❌ Error: ${result.error}`;
+  }
+
+  // If still empty after all processing
+  if (!output || output.trim() === '') {
+    output = '⚠️ Empty response received. Please try again or rephrase your question.';
   }
 
   // Clean up problematic characters for Telegram
@@ -215,14 +305,25 @@ ${containers}
 });
 
 // Command: /clear
-bot.onText(/\/clear/, (msg) => {
+bot.onText(/\/clear/, async (msg) => {
   const chatId = msg.chat.id;
-  userSessions.delete(chatId);
+  const session = getUserSession(chatId);
+  session.clearHistory();
+  sessionStore.deleteSession(chatId);
+  await sessionStore.saveSessions();
   bot.sendMessage(chatId, '🗑️ Chat history cleared');
 });
 
 // ============================================================
-// MAIN MESSAGE HANDLER (With Orchestrator)
+// REACTION HANDLER
+// ============================================================
+
+bot.on('message_reaction', async (reaction) => {
+  await handleReaction(reaction, metadataStore, bot);
+});
+
+// ============================================================
+// MAIN MESSAGE HANDLER (With Orchestrator & Metrics)
 // ============================================================
 
 bot.on('message', async (msg) => {
@@ -234,43 +335,89 @@ bot.on('message', async (msg) => {
 
   if (!message) return;
 
+  console.log(`[Bot] User ${chatId}: ${message}`);
+
+  // Initialize metrics collector
+  const metrics = new MetricsCollector(msg.message_id, message);
+
+  // FAST PATH: Try instant answer first
+  metrics.mark('fastPathCheck');
+  const instantResult = fastResponder.tryInstantAnswer(message);
+
+  if (instantResult.answered) {
+    // Send instant answer immediately
+    console.log(`[Bot] Instant answer: ${instantResult.text.substring(0, 30)}...`);
+    await bot.sendMessage(chatId, instantResult.text, { disable_web_page_preview: true })
+      .catch(err => console.error(`[Bot] Send error: ${err.message}`));
+    metrics.mark('responseSent');
+    return;
+  }
+
+  // Get acknowledgment for this message
+  const acknowledgment = fastResponder.getAcknowledgment(message);
+  console.log(`[Bot] Intent: ${acknowledgment.intent}, Acknowledgment: ${acknowledgment.text}`);
+
+  // Send acknowledgment IMMEDIATELY
+  await bot.sendMessage(chatId, acknowledgment.text)
+    .catch(err => console.error(`[Bot] Ack error: ${err.message}`));
+
+  metrics.mark('acknowledgmentSent');
+
   // Get or create user session
   const session = getUserSession(chatId);
 
-  // Send thinking indicator
-  const statusMsg = await bot.sendMessage(chatId, '🤖 ');
-
-  try {
-    // Use orchestrator to process the message
-    const result = await session.sendMessage(message);
-
-    console.log(`[Bot] User ${chatId}: ${message.substring(0, 50)}...`);
-    console.log(`[Bot] Skill: ${result.skill}, Model: ${result.model}, Time: ${result.executionTime}ms`);
-
-    // Format and send response
-    const responseText = formatOrchestratorResult(result);
-
+  // Process in background - don't block
+  setImmediate(async () => {
     try {
-      await bot.editMessageText(chatId, statusMsg.message_id, {
-        text: responseText.substring(0, 4000),  // Hard limit
-        disable_web_page_preview: true
-      });
-    } catch (editError) {
-      // If edit fails, send new message
-      await bot.sendMessage(chatId, responseText.substring(0, 4000), {
-        disable_web_page_preview: true
-      });
-    }
+      metrics.mark('orchestratorStart');
 
-  } catch (error) {
-    console.error(`[Bot] Error: ${error.message}`);
+      // Use orchestrator to process the message with metrics
+      const result = await session.sendMessage(message, { metrics });
 
-    try {
-      await bot.editMessageText(chatId, statusMsg.message_id, `❌ Error: ${error.message}`);
-    } catch (editError) {
-      await bot.sendMessage(chatId, `❌ Error: ${error.message}`);
+      metrics.mark('responseFormatStart');
+      const responseText = formatOrchestratorResult(result, metrics, 'medium');
+      metrics.mark('responseFormatEnd');
+
+      // Debug: log the response text to verify metrics are included
+      console.log(`[Bot] Response preview: ${responseText.substring(0, 100)}...`);
+
+      metrics.mark('responseSent');
+      const processingTime = Date.now() - metrics.timings.receivedAt;
+
+      console.log(`[Bot] User ${chatId}: Skill=${result.skill}, Model=${result.model}, Time=${result.executionTime}ms, Total=${processingTime}ms`);
+
+      // Send as new message (more reliable than edit)
+      const response = await bot.sendMessage(chatId, responseText.substring(0, 4000), {
+        disable_web_page_preview: true
+      }).catch(err => console.error(`[Bot] Response send error: ${err.message}`));
+
+      if (response) {
+        // Store metadata for reaction handling
+        const metricsBreakdown = metrics.getBreakdown();
+        metadataStore.store(response.message_id, {
+          chatId,
+          originalMessage: message,
+          responseText: responseText.substring(0, 4000),
+          skill: result.skill,
+          model: result.model,
+          metrics: metricsBreakdown,
+          modelExplanation: result.metadata?.modelExplanation,
+          complexityScore: result.metadata?.modelExplanation?.complexity,
+          verbosity: 'medium', // Default verbosity
+          type: 'bot-response'
+        });
+      }
+
+    } catch (error) {
+      console.error(`[Bot] Error: ${error.message}`);
+      console.error(`[Bot] Stack: ${error.stack}`);
+
+      metrics.markError(error);
+
+      await bot.sendMessage(chatId, `❌ Error: ${error.message}`)
+        .catch(err => console.error(`[Bot] Error send failed: ${err.message}`));
     }
-  }
+  });
 });
 
 // Handle document/file uploads
@@ -294,6 +441,7 @@ bot.on('document', async (msg) => {
       text: formatMessage(`📄 ${fileName}\n\n${responseText}`),
       parse_mode: 'Markdown'
     });
+
   } catch (error) {
     await bot.editMessageText(chatId, statusMsg.message_id, `❌ Error: ${error.message}`);
   }
@@ -304,9 +452,33 @@ bot.on('polling_error', (error) => {
   console.error('Polling error:', error);
 });
 
-// Success message
-console.log('✅ Clawdbot v3.0 with Skills & Orchestrator is running!');
-console.log('📱 Connected to Telegram');
-console.log('🧠 Orchestrator: Active');
-console.log('🎯 Skills: 8 available');
-console.log('💬 Chat mode: Natural language with smart routing');
+// ============================================================
+// INITIALIZATION
+// ============================================================
+
+(async () => {
+  try {
+    // IMPORTANT: Initialize session store BEFORE starting polling
+    const sessionCount = await sessionStore.init();
+    console.log(`[Bot] Session store initialized with ${sessionCount} sessions`);
+
+    // Start auto-save
+    sessionStore.startAutoSave();
+    console.log('[Bot] Session auto-save enabled');
+
+    // NOW start polling (after sessions are loaded)
+    bot.startPolling();
+    console.log('[Bot] Started polling for messages');
+
+    // Success message
+    console.log('✅ Clawdbot v4.0 with HTTP API & Session Persistence is running!');
+    console.log('📱 Connected to Telegram');
+    console.log('🧠 Orchestrator: Active');
+    console.log('💾 Session Persistence: Enabled');
+    console.log('🎯 Skills: 8 available');
+    console.log('💬 Chat mode: Natural language with smart routing');
+  } catch (error) {
+    console.error('[Bot] Initialization failed:', error);
+    process.exit(1);
+  }
+})();

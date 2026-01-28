@@ -24,6 +24,9 @@ COPY orchestrator/ ./orchestrator/
 # Copy skills
 COPY skills/ ./skills/
 
+# Copy storage modules (including fast-responder)
+COPY storage/ ./storage/
+
 # Expose port (not needed for polling)
 EXPOSE 3000
 
