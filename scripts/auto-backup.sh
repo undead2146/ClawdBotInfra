@@ -62,7 +62,8 @@ else
     # Commit with timestamp
     git commit -m "auto-backup: $(date +'%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE" 2>&1
 
-    auto-commit=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    local auto_commit
+    auto_commit=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     log "✅ Committed changes: $auto-commit"
 fi
 
