@@ -66,6 +66,14 @@ const skills = {
     models: ['fast'],
     timeout: 15000,
     handler: './skills/tts.js'
+  },
+  'skill-creator': {
+    name: 'Skill Creator',
+    description: 'Autonomously create new skills from descriptions',
+    keywords: ['create skill', 'new skill', 'add skill', 'make skill', 'skill creator'],
+    models: ['smart'],
+    timeout: 120000,
+    handler: './skills/skill-creator.js'
   }
 };
 
