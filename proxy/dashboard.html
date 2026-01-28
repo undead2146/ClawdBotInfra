@@ -1,0 +1,364 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Proxy Dashboard</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+    background: #0d1117; 
+    color: #c9d1d9;
+    padding: 20px; 
+}
+.container { max-width: 1400px; margin: 0 auto; }
+.header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #30363d;
+}
+h1 { 
+    color: #f0f6fc; 
+    font-size: 32px;
+    font-weight: 600;
+}
+.nav-buttons {
+    display: flex;
+    gap: 10px;
+}
+.nav-btn {
+    background: #21262d;
+    color: #f0f6fc;
+    border: 1px solid #30363d;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.nav-btn:hover {
+    background: #30363d;
+    border-color: #58a6ff;
+    color: #58a6ff;
+}
+.card { 
+    background: #161b22; 
+    border: 1px solid #30363d;
+    border-radius: 8px; 
+    padding: 25px; 
+    margin-bottom: 20px;
+}
+h2 { 
+    font-size: 20px; 
+    color: #f0f6fc; 
+    margin-bottom: 20px; 
+    border-bottom: 2px solid #21262d; 
+    padding-bottom: 10px;
+    font-weight: 600;
+}
+.grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+    gap: 15px; 
+}
+.status-item { 
+    padding: 15px; 
+    background: #0d1117; 
+    border-radius: 6px; 
+    border-left: 4px solid #30363d;
+    border: 1px solid #30363d;
+}
+.status-item.available { 
+    border-left: 4px solid #3fb950;
+    background: rgba(63, 185, 80, 0.05);
+}
+.status-item.unavailable { 
+    border-left: 4px solid #f85149;
+    background: rgba(248, 81, 73, 0.05);
+}
+.status-label { 
+    font-size: 12px; 
+    color: #8b949e; 
+    text-transform: uppercase; 
+    letter-spacing: 0.5px; 
+    margin-bottom: 5px; 
+}
+.status-value { 
+    font-size: 16px; 
+    font-weight: 600; 
+    color: #f0f6fc; 
+}
+.tier-row { 
+    display: flex; 
+    align-items: center; 
+    gap: 15px; 
+    margin-bottom: 15px; 
+    flex-wrap: wrap; 
+}
+.tier-label { 
+    font-weight: 600; 
+    min-width: 80px; 
+    color: #f0f6fc; 
+}
+select { 
+    padding: 10px 15px; 
+    border: 1px solid #30363d; 
+    border-radius: 6px; 
+    font-size: 14px; 
+    min-width: 180px; 
+    background: #0d1117; 
+    color: #f0f6fc;
+    cursor: pointer; 
+    transition: all 0.2s; 
+}
+select:hover { 
+    border-color: #58a6ff; 
+}
+select:focus { 
+    outline: none; 
+    border-color: #58a6ff; 
+    box-shadow: 0 0 0 3px rgba(88,166,255,0.1); 
+}
+.arrow { 
+    color: #8b949e; 
+    font-weight: bold; 
+    font-size: 18px; 
+}
+button { 
+    background: #238636; 
+    color: #ffffff; 
+    border: 1px solid #2ea043;
+    padding: 12px 24px; 
+    border-radius: 6px; 
+    font-size: 14px; 
+    font-weight: 600; 
+    cursor: pointer; 
+    transition: all 0.2s; 
+    margin-top: 10px; 
+}
+button:hover { 
+    background: #2ea043;
+}
+button:active { 
+    transform: scale(0.98);
+}
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+#message { 
+    margin-top: 15px; 
+    padding: 12px; 
+    border-radius: 6px; 
+    font-weight: 500; 
+    display: none;
+    border: 1px solid;
+}
+#message.success { 
+    background: rgba(63, 185, 80, 0.1);
+    color: #3fb950;
+    border-color: #3fb950;
+    display: block; 
+}
+#message.error { 
+    background: rgba(248, 81, 73, 0.1);
+    color: #f85149;
+    border-color: #f85149;
+    display: block; 
+}
+.description {
+    color: #8b949e;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+    <h1>🚀 Claude Code Proxy</h1>
+    <div class="nav-buttons">
+        <a href="/usage" class="nav-btn">
+            <span>📊</span>
+            <span>Usage Stats</span>
+        </a>
+        <a href="/logs.html" class="nav-btn">
+            <span>📋</span>
+            <span>View Logs</span>
+        </a>
+    </div>
+</div>
+
+<div class="card">
+<h2>Provider Status</h2>
+<div class="grid" id="providerStatus">
+<div class="status-item"><div class="status-label">Loading...</div></div>
+</div>
+</div>
+
+<div class="card">
+<h2>Routing Configuration</h2>
+<p class="description">Select provider and model for each tier. Changes apply immediately without restart.</p>
+
+<div class="tier-row">
+<span class="tier-label">Sonnet</span>
+<select id="sonnet_provider">
+<option value="antigravity">Antigravity</option>
+<option value="glm">GLM</option>
+<option value="anthropic">Anthropic</option>
+<option value="copilot">GitHub Copilot</option>
+</select>
+<span class="arrow">→</span>
+<select id="sonnet_model"></select>
+</div>
+
+<div class="tier-row">
+<span class="tier-label">Haiku</span>
+<select id="haiku_provider">
+<option value="antigravity">Antigravity</option>
+<option value="glm">GLM</option>
+<option value="anthropic">Anthropic</option>
+<option value="copilot">GitHub Copilot</option>
+</select>
+<span class="arrow">→</span>
+<select id="haiku_model"></select>
+</div>
+
+<div class="tier-row">
+<span class="tier-label">Opus</span>
+<select id="opus_provider">
+<option value="antigravity">Antigravity</option>
+<option value="glm">GLM</option>
+<option value="anthropic">Anthropic</option>
+<option value="copilot">GitHub Copilot</option>
+</select>
+<span class="arrow">→</span>
+<select id="opus_model"></select>
+</div>
+
+<button onclick="applyConfig()">Apply Changes</button>
+<div id="message"></div>
+</div>
+</div>
+
+<script>
+let config = {};
+let availableModels = {};
+let providersAvailable = {};
+
+async function loadConfig() {
+try {
+const response = await fetch('/config');
+const data = await response.json();
+config = data.config;
+availableModels = data.available_models;
+providersAvailable = data.providers_available;
+
+document.getElementById('sonnet_provider').value = config.sonnet_provider;
+document.getElementById('haiku_provider').value = config.haiku_provider;
+document.getElementById('opus_provider').value = config.opus_provider;
+
+populateModelDropdown('sonnet', config.sonnet_provider, config.sonnet_model);
+populateModelDropdown('haiku', config.haiku_provider, config.haiku_model);
+populateModelDropdown('opus', config.opus_provider, config.opus_model);
+
+document.getElementById('sonnet_provider').onchange = (e) => populateModelDropdown('sonnet', e.target.value);
+document.getElementById('haiku_provider').onchange = (e) => populateModelDropdown('haiku', e.target.value);
+document.getElementById('opus_provider').onchange = (e) => populateModelDropdown('opus', e.target.value);
+
+updateProviderStatus();
+} catch (error) {
+console.error('Failed to load config:', error);
+showMessage('Failed to load configuration: ' + error.message, 'error');
+}
+}
+
+function populateModelDropdown(tier, provider, selectedModel) {
+const select = document.getElementById(tier + '_model');
+const models = availableModels[provider] || [];
+select.innerHTML = '';
+models.forEach(model => {
+const option = document.createElement('option');
+option.value = model;
+option.textContent = model;
+select.appendChild(option);
+});
+if (selectedModel && models.includes(selectedModel)) {
+select.value = selectedModel;
+} else if (models.length > 0) {
+select.value = models[0];
+}
+}
+
+function updateProviderStatus() {
+const div = document.getElementById('providerStatus');
+const providers = [
+{ name: 'Antigravity', key: 'antigravity' },
+{ name: 'GLM', key: 'glm' },
+{ name: 'Anthropic', key: 'anthropic' },
+{ name: 'GitHub Copilot', key: 'copilot' }
+];
+div.innerHTML = providers.map(p => {
+const available = providersAvailable[p.key];
+const statusClass = available ? 'available' : 'unavailable';
+const statusText = available ? 'Available' : 'Not Configured';
+return '<div class="status-item ' + statusClass + '"><div class="status-label">' + p.name + '</div><div class="status-value">' + statusText + '</div></div>';
+}).join('');
+}
+
+async function applyConfig() {
+const button = event.target;
+button.disabled = true;
+button.textContent = 'Applying...';
+
+const updates = {
+sonnet_provider: document.getElementById('sonnet_provider').value,
+haiku_provider: document.getElementById('haiku_provider').value,
+opus_provider: document.getElementById('opus_provider').value,
+sonnet_model: document.getElementById('sonnet_model').value,
+haiku_model: document.getElementById('haiku_model').value,
+opus_model: document.getElementById('opus_model').value
+};
+
+try {
+const response = await fetch('/config', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(updates)
+});
+const data = await response.json();
+if (response.ok) {
+config = data.config;
+showMessage('Configuration updated successfully!', 'success');
+} else {
+showMessage('Error: ' + (data.error || 'Unknown error'), 'error');
+}
+} catch (error) {
+showMessage('Failed to update: ' + error.message, 'error');
+} finally {
+button.disabled = false;
+button.textContent = 'Apply Changes';
+}
+}
+
+function showMessage(text, type) {
+const msgDiv = document.getElementById('message');
+msgDiv.textContent = text;
+msgDiv.className = type;
+setTimeout(() => { msgDiv.style.display = 'none'; }, 5000);
+}
+
+loadConfig();
+setInterval(loadConfig, 10000);
+</script>
+</body>
+</html>

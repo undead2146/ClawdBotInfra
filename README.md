@@ -1,60 +1,114 @@
-# Claude Stack - VPS Infrastructure
+# Claude Stack - AI Agent Infrastructure
 
-Complete Docker Compose infrastructure for running Claude Code agents, API routing, and automated tasks on an Oracle Cloud VPS.
+**Version:** 1.1.0 (Enhanced Bot with Chat-by-Default)
+**Status:** ✅ Production Ready (Basic)
+**Roadmap:** See [ARCHITECTURE.md](ARCHITECTURE.md) for multi-agent plans
+
+---
 
 ## Quick Start
 
 ```bash
 # 1. Clone this repository
-git clone https://github.com/YOUR_USER/vps-homelab.git ~/claude-stack
+git clone <repo-url> ~/claude-stack
 cd ~/claude-stack
 
-# 2. Run bootstrap script
-chmod +x scripts/bootstrap.sh
-./scripts/bootstrap.sh
+# 2. Start all services
+docker-compose up -d
 
-# 3. Edit .env with your API keys
-nano .env
-
-# 4. Re-run bootstrap to start services
-./scripts/bootstrap.sh
+# 3. Check status
+docker-compose ps
 ```
+
+---
 
 ## What's Included
 
-- **Antigravity**: Gemini/Google API bridge (Port 8081)
-- **Claude Proxy**: Custom API router with failover (Port 8082)
-- **Clawdbot**: Claude Code agent for automated tasks
-- **Scheduler**: Docker-native cron (Ofelia)
-- **Workspace**: Persistent storage for repositories
-- **Scripts**: Backup, restore, update utilities
-- **Documentation**: Complete setup and runbook guides
+**Current (v1.1):**
+- ✅ **Claude Proxy**: Python-based API router with dashboard (Port 8082)
+- ✅ **Clawdbot**: Claude Code agent for automated tasks
+- ✅ **Telegram Bot**: Mobile interface with chat-by-default
+- ✅ **Scheduler**: Docker-native cron (Ofelia)
+- ✅ **GLM Integration**: Cost-effective AI routing
+- ✅ **Workspace**: Persistent storage for repositories
+
+**Planned (v2.0 - Multi-Agent):**
+- 🔄 Message broker (RabbitMQ/Redis)
+- 🔄 Specialized agents (PR reviewer, coder, scraper)
+- 🔄 Workflow orchestration (CrewAI/LangGraph)
+- 🔄 Smart task routing
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed roadmap.
+
+---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│              Oracle VPS (Free Tier)          │
-├─────────────────────────────────────────────┤
-│                                              │
-│  ┌─────────────┐    ┌─────────────┐         │
-│  │Antigravity  │    │Claude Proxy │         │
-│  │ Port 8081   │───▶│ Port 8082   │         │
-│  │(Gemini)     │    │(Router)     │         │
-│  └─────────────┘    └──────┬───────┘         │
-│                             │                │
-│                      ┌──────▼───────┐        │
-│                      │  Clawdbot    │        │
-│                      │ (Agent)      │        │
-│                      └──────┬───────┘        │
-│                             │                │
-│                      ┌──────▼───────┐        │
-│                      │  Workspace   │        │
-│                      │  /repos      │        │
-│                      └──────────────┘        │
-│                                              │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Oracle VPS (24GB RAM)                    │
+│                    IP: 152.70.171.121                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────┐    ┌─────────────────┐                │
+│  │  claude-proxy   │    │  clawdbot       │                │
+│  │  (Port 8082)    │◄───│  Claude Code    │                │
+│  │  Python Flask   │    │  Agent/Worker   │                │
+│  └────────▲────────┘    └────────▲────────┘                │
+│           │                       │                          │
+│           │               ┌───────┴────────┐                │
+│           │               │   workspace    │                │
+│  ┌────────┴────────┐      │  (Shared Vol)  │                │
+│  │ clawdbot-tg-bot │      └────────────────┘                │
+│  │ Telegram Bot    │                                      │
+│  │ (Chat by Def)   │                                      │
+│  └─────────────────┘                                      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+         │                                          │
+         ▼                                          ▼
+    Z.AI GLM API                          User's Phone (Telegram)
 ```
+
+---
+
+## Telegram Bot - Now with Chat-by-Default!
+
+**No more `/chat` command needed!** Just type and chat.
+
+### Usage Examples
+
+**General Chat:**
+```
+Who are you?
+What's 2+2?
+Explain React hooks
+```
+
+**Smart Tasks (auto-detected):**
+```
+Review PR in https://github.com/user/repo #123
+Create PR for adding user authentication
+Sync todos from ticktick.com
+```
+
+**Commands:**
+```
+/start  - Get started
+/help   - Show help
+/status - System status
+```
+
+**File Upload:**
+Attach any file and Claude will analyze it!
+
+### How It Works
+
+The bot intelligently detects your intent:
+- Contains "PR" + "review" → PR Review mode
+- Contains "create" + "PR" → PR Creation mode
+- Contains "todo" or "sync" → Todo sync mode
+- Anything else → Natural chat with Claude
 
 ## Project Structure
 

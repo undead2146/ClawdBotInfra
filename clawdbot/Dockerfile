@@ -34,7 +34,7 @@ RUN mkdir -p /prompts
 RUN mkdir -p /workspace/repos /workspace/tasks
 
 # Set up a non-root user (optional, for security)
-RUN useradd -m -u 1000 clawdbot && \
+RUN useradd -m -u 2000 clawdbot && \
     chown -R clawdbot:clawdbot /workspace /root/.claude /prompts
 
 # Switch to non-root user

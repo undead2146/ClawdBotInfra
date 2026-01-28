@@ -1,44 +1,17 @@
 # ============================================================
-# Claude Stack - Complete Docker Compose Configuration
+# Claude Stack - Docker Compose Configuration
 # ============================================================
 # This orchestrates:
-# - antigravity: Gemini/Google API bridge
-# - proxy: Custom Claude API router (claude-proxy)
+# - proxy: Python-based ClaudeProxy router with dashboard
 # - clawdbot: Claude Code agent/worker
 # - scheduler: Docker-native cron (Ofelia)
 # ============================================================
 
 services:
   # ============================================
-  # 1. ANTIGRAVITY (Gemini/Google Bridge)
-  # ============================================
-  antigravity:
-    image: node:20-slim
-    container_name: antigravity
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    volumes:
-      - antigravity-data:/root/.config/antigravity-proxy
-    command: >
-      bash -c "npm install -g antigravity-claude-proxy@latest &&
-      antigravity-claude-proxy --host 0.0.0.0"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - claude-network
-
-  # ============================================
-  # 2. CLAUDE PROXY (Your Router)
+  # CLAUDE PROXY (Python-based Multi-Provider Router)
   # ============================================
   proxy:
-    # Replace with your actual GitHub repo
-    # build: https://github.com/YOUR_USER/claude-proxy.git#main
-    # Or use local build context:
     build:
       context: ./proxy
       dockerfile: Dockerfile
@@ -46,16 +19,18 @@ services:
     restart: unless-stopped
     ports:
       - "8082:8082"
-    depends_on:
-      antigravity:
-        condition: service_healthy
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GITHUB_COPILOT_API_KEY=${GITHUB_COPILOT_API_KEY}
-      - GLM_API_KEY=${GLM_API_KEY}
-      - ANTIGRAVITY_URL=http://antigravity:8081
       - PORT=8082
-      - HOST=0.0.0.0
+      - HAIKU_PROVIDER=glm
+      - SONNET_PROVIDER=glm
+      - HAIKU_PROVIDER_API_KEY=f588d31a2a6f4869a0297509da6d42ab.YwwL3W8HRUxLNjIk
+      - HAIKU_PROVIDER_BASE_URL=https://api.z.ai/api/anthropic
+      - SONNET_PROVIDER_API_KEY=f588d31a2a6f4869a0297509da6d42ab.YwwL3W8HRUxLNjIk
+      - SONNET_PROVIDER_BASE_URL=https://api.z.ai/api/anthropic
+      - GLM_HAIKU_MODEL=glm-4.7
+      - GLM_SONNET_MODEL=glm-4.7
+      - ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-4.7
+      - ANTHROPIC_DEFAULT_SONNET_MODEL=glm-4.7
     volumes:
       - proxy-config:/app/config
     healthcheck:
@@ -68,7 +43,7 @@ services:
       - claude-network
 
   # ============================================
-  # 3. CLAWDBOT (The Agent)
+  # CLAWDBOT (The Agent)
   # ============================================
   clawdbot:
     build:
@@ -83,7 +58,7 @@ services:
       - ANTHROPIC_BASE_URL=http://proxy:8082
       - ANTHROPIC_API_KEY=placeholder
       - GH_TOKEN=${GH_TOKEN}
-      - CLAUDE_DEFAULT_MODEL=claude-sonnet-4-20250514
+      - CLAUDE_DEFAULT_MODEL=claude-haiku-4-20250514
     volumes:
       - claude-auth:/root/.claude
       - ./clawdbot/prompts:/prompts:ro
@@ -96,7 +71,7 @@ services:
       - claude-network
 
   # ============================================
-  # 4. SCHEDULER (Cron Jobs)
+  # SCHEDULER (Cron Jobs)
   # ============================================
   scheduler:
     image: mcuadros/ofelia:latest
@@ -111,12 +86,30 @@ services:
     networks:
       - claude-network
 
+  # ============================================
+  # TELEGRAM BOT (Mobile Interface)
+  # ============================================
+  telegram-bot:
+    build:
+      context: ./clawdbot/bot
+      dockerfile: Dockerfile
+    container_name: clawdbot-telegram
+    restart: unless-stopped
+    depends_on:
+      - clawdbot
+    environment:
+      - TELEGRAM_BOT_TOKEN=8558008669:AAFPdgQ0-9snUSjbsjrvvjP00mw7lUIIV5Y
+      - CLAWDBOT_URL=http://clawdbot:8082
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - workspace:/workspace:ro
+    networks:
+      - claude-network
+
 # ============================================================
 # VOLUMES - Persistent Data Storage
 # ============================================================
 volumes:
-  antigravity-data:
-    name: antigravity-data
   proxy-config:
     name: proxy-config
   claude-auth:

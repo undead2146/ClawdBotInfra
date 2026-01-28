@@ -1,0 +1,14 @@
+{
+  "name": "clawdbot-telegram",
+  "version": "1.0.0",
+  "description": "Telegram bot interface for Clawdbot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7"
+  }
+}
