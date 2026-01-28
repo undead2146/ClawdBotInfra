@@ -35,14 +35,9 @@ function getUserSession(userId) {
 function formatOrchestratorResult(result) {
   let output = '';
 
-  // Add metadata header
-  if (result.metadata) {
-    const { modelExplanation, confidence } = result.metadata;
-    if (confidence > 1) {
-      output += `🎯 *Detected: ${result.skill}*\n`;
-      output += `🧠 *Model: ${result.model}*\n`;
-      output += `⏱ *${result.executionTime}ms*\n\n`;
-    }
+  // Add metadata header only for concise responses
+  if (result.metadata && result.metadata.confidence > 2) {
+    output = `🎯 ${result.skill} | 🧠 ${result.model}\n\n`;
   }
 
   // Add main result
@@ -63,6 +58,12 @@ function formatOrchestratorResult(result) {
   if (result.error && !result.result) {
     output += `❌ Error: ${result.error}`;
   }
+
+  // Clean up problematic characters for Telegram
+  output = output
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')  // Remove control chars
+    .replace(/\*\*/g, '')  // Remove bold markers that can break
+    .replace(/__([^_]+)__/g, '$1');  // Fix underlines
 
   return output;
 }
@@ -251,11 +252,14 @@ bot.on('message', async (msg) => {
 
     try {
       await bot.editMessageText(chatId, statusMsg.message_id, {
-        text: formatMessage(responseText),
-        parse_mode: 'Markdown'
+        text: responseText.substring(0, 4000),  // Hard limit
+        disable_web_page_preview: true
       });
     } catch (editError) {
-      await bot.sendMessage(chatId, formatMessage(responseText), { parse_mode: 'Markdown' });
+      // If edit fails, send new message
+      await bot.sendMessage(chatId, responseText.substring(0, 4000), {
+        disable_web_page_preview: true
+      });
     }
 
   } catch (error) {
