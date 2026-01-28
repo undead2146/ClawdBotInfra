@@ -136,6 +136,12 @@ async function executeSkill(skillId, userMessage, prompt, modelConfig, context) 
         skillResult = await executeClaude(prompt, modelConfig);
         break;
 
+      case 'skill-creator':
+        // Extract skill description from message
+        const skillDesc = userMessage.replace(/create skill|make skill|add skill|new skill|skill for/gi, '').trim();
+        skillResult = await skillHandler.createSkillFromDescription(skillDesc);
+        break;
+
       default:
         // Default to Claude with specialized prompt
         skillResult = await executeClaude(prompt, modelConfig);

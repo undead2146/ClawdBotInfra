@@ -246,6 +246,24 @@ Convert text to speech:
 4. Provide the file path
 `;
       break;
+
+    case 'skill-creator':
+      prompt += `
+Create a new skill based on the description:
+1. Analyze requirements from the description
+2. Generate skill code with proper structure
+3. Add skill to skill-router.js
+4. Wire up skill in orchestrator/main.js
+5. Test the skill
+6. Provide summary of what was created
+
+Return a summary including:
+- Skill ID
+- Files created/modified
+- Test results
+- Next steps for the user
+`;
+      break;
   }
 
   return prompt;
